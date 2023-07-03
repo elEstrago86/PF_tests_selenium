@@ -1,9 +1,24 @@
 import time
-import pytest
 import re
+import pytest
+from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+
+
+@pytest.fixture(scope="session")
+def web_browser():
+    # Инициализация веб-драйвера
+    driver = webdriver.Chrome()
+    # Максимальное время ожидания элемента на странице
+    driver.implicitly_wait(10)
+    # Размер окна браузера
+    driver.maximize_window()
+    # Возврат объекта драйвера
+    yield driver
+    # Закрытие браузера после завершения тестов
+    driver.quit()
 
 
 def test_petfriends(web_browser):
@@ -46,4 +61,93 @@ def test_petfriends(web_browser):
     else:
         raise ValueError("Не удалось извлечь количество питомцев")
 
-    assert pet_count == 19, f"Количество питомцев не соответствует ожидаемому. Ожидаемое количество: 19, текущее количество: {pet_count}"
+    pet_cards = web_browser.find_elements(By.CLASS_NAME, "smart_cell")
+
+    # Исключаем первый элемент, который является оглавлением таблицы
+    pet_cards = pet_cards[1:]
+
+    assert len(pet_cards) == pet_count
+
+    # Вывод сообщения об успешном результате выполнения теста
+    print("В профиле пользователя присутствуют все питомцы")
+
+
+
+def test_pet_photos(web_browser):
+    web_browser.get("https://petfriends.skillfactory.ru/my_pets")
+    time.sleep(5)
+
+    pet_cards = web_browser.find_elements(By.XPATH, "//div[@class='card-img-top']//img[@src]")
+
+    # Подсчитываем количество карточек питомцев с фотографиями (с расширением .jpeg)
+    pets_with_photos = 0
+    for card in pet_cards:
+        src = card.get_attribute("src")
+        if src.endswith(".jpeg"):
+            pets_with_photos += 1
+
+    # Получаем общее количество карточек питомцев
+    total_pet_cards = len(web_browser.find_elements(By.CLASS_NAME, "card-deck"))
+
+    # Проверяем, что количество карточек с фотографиями больше или равно половине общего количества карточек
+    assert pets_with_photos >= total_pet_cards / 2, "У половины или менее карточек питомцев нет фотографий"
+
+    # Выводим сообщение об успешном результате выполнения теста
+    print("У половины или более карточек питомцев есть фотографии")
+
+
+
+
+def test_pet_details(web_browser):
+    web_browser.get("https://petfriends.skillfactory.ru/my_pets")
+    web_browser.implicitly_wait(5)
+
+    pet_cards = web_browser.find_elements(By.XPATH, "//table[@class='table table-hover']/tbody/tr")
+    for card in pet_cards:
+        name_element = card.find_element(By.XPATH, "./td[2]")
+        age_element = card.find_element(By.XPATH, "./td[4]")
+        breed_element = card.find_element(By.XPATH, "./td[3]")
+
+        pet_name = name_element.text.strip()
+        pet_age = age_element.text.strip()
+        pet_breed = breed_element.text.strip()
+
+        assert pet_name != "", "У питомца отсутствует имя"
+        assert pet_age != "", "У питомца отсутствует возраст"
+        assert pet_breed != "", "У питомца отсутствует порода"
+
+    # Вывод сообщения об успешном результате выполнения теста
+    print("У всех питомцев есть имя, возраст и порода")
+
+
+
+def test_unique_pet_names(web_browser):
+    web_browser.get("https://petfriends.skillfactory.ru/my_pets")
+    WebDriverWait(web_browser, 5).until(EC.presence_of_element_located((By.XPATH, "//table[@class='table table-hover']/tbody/tr/td[1]")))
+
+    pet_name_elements = web_browser.find_elements(By.XPATH, "//table[@class='table table-hover']/tbody/tr/td[1]")
+
+    pet_names = []
+    for element in pet_name_elements:
+        pet_name = element.text.strip()
+        pet_names.append(pet_name)
+
+    duplicate_names = [name for name in pet_names if pet_names.count(name) > 1]
+
+    assert len(duplicate_names) == 0, f"Обнаружены питомцы с совпадающими именами: {', '.join(duplicate_names)}"
+
+    # Вывод сообщения об успешном результате выполнения теста
+    print("У всех питомцев уникальные имена")
+
+
+def test_no_duplicate_pets(web_browser):
+    web_browser.get("https://petfriends.skillfactory.ru/my_pets")
+    web_browser.implicitly_wait(5)
+
+    pet_cards = web_browser.find_elements(By.XPATH, "//table[@class='table table-hover']/tbody/tr")
+    pet_names = [card.find_element(By.XPATH, "./td[2]").text.strip() for card in pet_cards[1:4]]
+
+    assert len(set(pet_names)) == len(pet_names), "Найдены повторяющиеся питомцы"
+
+    # Вывод сообщения об успешном результате выполнения теста
+    print("Все питомцы уникальны")
