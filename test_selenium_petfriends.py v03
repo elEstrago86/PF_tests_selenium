@@ -1,0 +1,120 @@
+import time
+import re
+import pytest
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+@pytest.fixture(scope="session")
+def web_browser():
+    # Инициализация веб-драйвера
+    driver = webdriver.Chrome()
+    # Максимальное время ожидания элемента на странице
+    driver.implicitly_wait(10)
+    # Размер окна браузера
+    driver.maximize_window()
+    # Возврат объекта драйвера
+    yield driver
+    # Закрытие браузера после завершения тестов
+    driver.quit()
+
+
+def test_petfriends(web_browser):
+    web_browser.get("https://petfriends.skillfactory.ru/")
+    time.sleep(5)
+
+    btn_newuser = web_browser.find_element(By.XPATH, "//button[@onclick=\"document.location='/new_user';\"]")
+    btn_newuser.click()
+
+    btn_exist_acc = web_browser.find_element(By.LINK_TEXT, "У меня уже есть аккаунт")
+    btn_exist_acc.click()
+
+    field_email = web_browser.find_element(By.ID, "email")
+    field_email.clear()
+    field_email.send_keys("estragox@gmail.com")
+
+    field_pass = web_browser.find_element(By.ID, "pass")
+    field_pass.clear()
+    field_pass.send_keys("QweszxC007")
+
+    btn_submit = web_browser.find_element(By.XPATH, "//button[@type='submit']")
+    btn_submit.click()
+
+    time.sleep(5)
+
+    my_pets_link = WebDriverWait(web_browser, 10).until(
+        EC.element_to_be_clickable((By.LINK_TEXT, "Мои питомцы"))
+    )
+    my_pets_link.click()
+
+    expected_url = "https://petfriends.skillfactory.ru/my_pets"
+    assert web_browser.current_url == expected_url, f"URL после перехода не соответствует ожидаемому. Ожидаемый URL: {expected_url}, текущий URL: {web_browser.current_url}"
+
+    pet_count_element = web_browser.find_element(By.XPATH, "//div[contains(@class, 'col-sm-4 left')]")
+    pet_count_text = pet_count_element.text
+
+    pet_count_match = re.search(r'Питомцев: (\d+)', pet_count_text)
+    if pet_count_match:
+        pet_count = int(pet_count_match.group(1))
+    else:
+        raise ValueError("Не удалось извлечь количество питомцев")
+
+    pet_cards = web_browser.find_elements(By.CLASS_NAME, "smart_cell")
+
+    # Исключаем первый элемент, который является оглавлением таблицы
+    pet_cards = pet_cards[1:]
+
+    assert len(pet_cards) == pet_count
+
+    # Вывод сообщения об успешном результате выполнения теста
+    print("В профиле пользователя присутствуют все питомцы")
+
+
+
+def test_pet_photos(web_browser):
+    web_browser.get("https://petfriends.skillfactory.ru/my_pets")
+    time.sleep(5)
+
+    pet_cards = web_browser.find_elements(By.XPATH, "//div[@class='card-img-top']//img[@src]")
+
+    # Подсчитываем количество карточек питомцев с фотографиями (с расширением .jpeg)
+    pets_with_photos = 0
+    for card in pet_cards:
+        src = card.get_attribute("src")
+        if src.endswith(".jpeg"):
+            pets_with_photos += 1
+
+    # Получаем общее количество карточек питомцев
+    total_pet_cards = len(web_browser.find_elements(By.CLASS_NAME, "card-deck"))
+
+    # Проверяем, что количество карточек с фотографиями больше или равно половине общего количества карточек
+    assert pets_with_photos >= total_pet_cards / 2, "У половины или менее карточек питомцев нет фотографий"
+
+    # Выводим сообщение об успешном результате выполнения теста
+    print("У половины или более карточек питомцев есть фотографии")
+
+
+
+
+def test_pet_details(web_browser):
+    web_browser.get("https://petfriends.skillfactory.ru/my_pets")
+    time.sleep(5)
+
+    pet_cards = web_browser.find_elements(By.XPATH, "//table[@class='table table-hover']/tbody/tr")
+    for card in pet_cards:
+        name_element = card.find_element(By.XPATH, "./td[2]")
+        age_element = card.find_element(By.XPATH, "./td[4]")
+        breed_element = card.find_element(By.XPATH, "./td[3]")
+
+        pet_name = name_element.text.strip()
+        pet_age = age_element.text.strip()
+        pet_breed = breed_element.text.strip()
+
+        assert pet_name != "", "У питомца отсутствует имя"
+        assert pet_age != "", "У питомца отсутствует возраст"
+        assert pet_breed != "", "У питомца отсутствует порода"
+
+    # Вывод сообщения об успешном результате выполнения теста
+    print("У всех питомцев есть имя, возраст и порода")
